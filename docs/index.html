@@ -1,0 +1,214 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Data Challenger</title>
+<style>
+ body{font-family:Arial,Helvetica,sans-serif;margin:0;color:#222;background:#f6f6f8}
+ header{background:#7f1d1d;color:#fff;padding:14px 24px}
+ header h1{margin:0;font-size:20px}
+ .wrap{max-width:1150px;margin:24px auto;padding:0 20px}
+ .card{background:#fff;border:1px solid #e2e2e6;border-radius:8px;padding:20px;margin-bottom:20px}
+ table{border-collapse:collapse;width:100%;font-size:13px}
+ th,td{border:1px solid #d9d9de;padding:7px 8px;vertical-align:top;text-align:left}
+ th{background:#c00000;color:#fff}
+ tr:nth-child(even) td{background:#fbeaea}
+ .sev-High{background:#f4cccc!important;font-weight:bold;text-align:center}
+ .sev-Medium{background:#fce5cd!important;font-weight:bold;text-align:center}
+ .sev-Low{background:#fff2cc!important;font-weight:bold;text-align:center}
+ .ev{color:#c00000;font-weight:bold;text-align:center;white-space:nowrap}
+ .btn{display:inline-block;background:#c00000;color:#fff;padding:9px 16px;border:0;
+      border-radius:6px;text-decoration:none;font-size:14px;cursor:pointer}
+ .btn.secondary{background:#555}
+ input[type=file],select,textarea{font-size:14px;padding:6px;border:1px solid #bbb;border-radius:5px}
+ #users-table input[type=text],#users-table input[type=email]{width:95%;font-size:13px;padding:5px;
+   border:1px solid #ccc;border-radius:4px}
+ #users-table input:disabled{background:transparent;border-color:transparent;color:#222}
+ .doc-table{table-layout:auto}
+ .doc-table .resp-col{min-width:240px;max-width:none;white-space:pre-wrap;
+   word-break:break-word;overflow-wrap:anywhere}
+ textarea{width:100%;min-height:120px}
+ .muted{color:#777;font-size:13px}
+ .flash{background:#fff3cd;border:1px solid #ffe08a;padding:10px 14px;border-radius:6px;margin-bottom:14px}
+ .pill{padding:2px 8px;border-radius:10px;font-size:12px}
+ .pill.pending{background:#eee;color:#555}
+ .pill.answered{background:#d7f5dd;color:#1b7a34}
+ .pill.notified{background:#dbe9fb;color:#1d4e89}
+ .pill.dryrun{background:#fdf1d6;color:#8a6d1a}
+ .resp-empty{color:#999;font-style:italic}
+ code{background:#f0f0f2;padding:2px 5px;border-radius:4px;font-size:12px}
+ .linkcell{max-width:230px;word-break:break-all}
+ .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+ .metric{background:#fff;border:1px solid #e2e2e6;border-radius:8px;padding:15px}
+ .metric b{display:block;font-size:24px;margin-bottom:4px}
+ .hidden{display:none}
+ @media(max-width:780px){.metrics{grid-template-columns:1fr 1fr}.wrap{padding:0 12px}table{font-size:12px}}
+</style></head><body>
+<header><h1>Data Challenger</h1></header>
+<div class="wrap">
+ <div class="flash">GitHub Pages version: runs fully in the browser. The Flask repository keeps the full local prototype.</div>
+
+ <div class="card">
+  <h2>1) Upload the file</h2>
+  <p class="muted">Formats: CSV. Column names may vary; they are auto-detected.</p>
+  <p><input id="file" type="file" accept=".csv,text/csv"></p>
+  <p>
+   <button class="btn" id="sample" type="button">Load HR sample</button>
+   <button class="btn secondary" id="analyse" type="button">Analyse pasted CSV</button>
+  </p>
+  <p><textarea id="csv" placeholder="Paste CSV data here..."></textarea></p>
+ </div>
+
+ <div class="metrics">
+  <div class="metric"><b id="rows">0</b><span class="muted">Rows scanned</span></div>
+  <div class="metric"><b id="cols">0</b><span class="muted">Columns detected</span></div>
+  <div class="metric"><b id="issues">0</b><span class="muted">Findings</span></div>
+  <div class="metric"><b id="score">-</b><span class="muted">Readiness score</span></div>
+ </div>
+
+ <div class="card">
+  <h3>Available reviewers (master data)</h3>
+  <table id="users-table">
+   <tr><th>Name</th><th>Email</th><th>Role</th><th>Department</th><th>Active</th></tr>
+   <tr><td><input type="text" value="Alex Morgan" disabled></td><td><input type="email" value="alex.morgan@example.com" disabled></td><td><input type="text" value="Logistics Manager" disabled></td><td><input type="text" value="Logistics" disabled></td><td style="text-align:center"><input type="checkbox" checked disabled></td></tr>
+   <tr><td><input type="text" value="Priya Nair" disabled></td><td><input type="email" value="priya.nair@example.com" disabled></td><td><input type="text" value="Financial Controller" disabled></td><td><input type="text" value="Finance" disabled></td><td style="text-align:center"><input type="checkbox" checked disabled></td></tr>
+   <tr><td><input type="text" value="Tom Becker" disabled></td><td><input type="email" value="tom.becker@example.com" disabled></td><td><input type="text" value="Human Resource Director" disabled></td><td><input type="text" value="HR" disabled></td><td style="text-align:center"><input type="checkbox" checked disabled></td></tr>
+   <tr><td><input type="text" value="Sofia Rossi" disabled></td><td><input type="email" value="sofia.rossi@example.com" disabled></td><td><input type="text" value="Travel & Expense Lead" disabled></td><td><input type="text" value="Finance" disabled></td><td style="text-align:center"><input type="checkbox" checked disabled></td></tr>
+   <tr><td><input type="text" value="Daniel Cho" disabled></td><td><input type="email" value="daniel.cho@example.com" disabled></td><td><input type="text" value="Treasury / FX" disabled></td><td><input type="text" value="Treasury" disabled></td><td style="text-align:center"><input type="checkbox" checked disabled></td></tr>
+  </table>
+ </div>
+
+ <div class="card">
+  <h3>2) Findings, owners and responses</h3>
+  <table id="findings">
+   <tr><th>#</th><th>Issue Area</th><th>What we detected</th><th>Evidence</th><th>Strategic question</th><th>Assigned to</th><th>Sev.</th><th>Response</th></tr>
+   <tr><td colspan="8" class="muted">Upload or paste a CSV to create the review.</td></tr>
+  </table>
+  <p class="muted">Response links, Slack delivery and PDF export need the Flask backend and are available in the local prototype.</p>
+ </div>
+
+ <div class="card">
+  <h3>Detected columns</h3>
+  <div id="detected" class="muted">No dataset analysed yet.</div>
+ </div>
+
+ <div class="card">
+  <h3>Data preview</h3>
+  <div style="overflow:auto"><table id="preview"><tr><td class="muted">No data loaded.</td></tr></table></div>
+ </div>
+</div>
+
+<script>
+const sampleCsv = `Age,Attrition,BusinessTravel,DailyRate,Department,DistanceFromHome,Education,EducationField,EmployeeCount,EmployeeNumber,EnvironmentSatisfaction,Gender,HourlyRate,JobInvolvement,JobLevel,JobRole,JobSatisfaction,MaritalStatus,MonthlyIncome,MonthlyRate,NumCompaniesWorked,Over18,OverTime,PercentSalaryHike,PerformanceRating,RelationshipSatisfaction,StandardHours,StockOptionLevel,TotalWorkingYears,TrainingTimesLastYear,WorkLifeBalance,YearsAtCompany,YearsInCurrentRole,YearsSinceLastPromotion,YearsWithCurrManager
+41,Yes,Travel_Rarely,1102,Sales,1,2,Life Sciences,1,1,2,Female,94,3,2,Sales Executive,4,Single,5993,19479,8,Y,Yes,11,3,1,80,0,8,0,1,6,4,0,5
+49,No,Travel_Frequently,279,Research & Development,8,1,Life Sciences,1,2,3,Male,61,2,2,Research Scientist,2,Married,5130,24907,1,Y,No,23,4,4,80,1,10,3,3,10,7,1,7
+37,Yes,Travel_Rarely,1373,Research & Development,2,2,Other,1,4,4,Male,92,2,1,Laboratory Technician,3,Single,2090,2396,6,Y,Yes,15,3,2,80,0,7,3,3,0,0,0,0
+33,No,Travel_Frequently,1392,Research & Development,3,4,Life Sciences,1,5,4,Female,56,3,1,Research Scientist,3,Married,2909,23159,1,Y,Yes,11,3,3,80,0,8,3,3,8,7,3,0
+27,No,Travel_Rarely,591,Research & Development,2,1,Medical,1,7,1,Male,40,3,1,Laboratory Technician,2,Married,3468,16632,9,Y,No,12,3,4,80,1,6,3,3,2,2,2,2
+32,No,Travel_Frequently,1005,Research & Development,2,2,Life Sciences,1,8,4,Male,79,3,1,Laboratory Technician,4,Single,3068,11864,0,Y,No,13,3,3,80,0,8,2,2,7,7,3,6
+59,No,Travel_Rarely,1324,Research & Development,3,3,Medical,1,10,3,Female,81,4,1,Laboratory Technician,1,Married,2670,9964,4,Y,Yes,20,4,1,80,3,12,3,2,1,0,0,0`;
+
+const reviewers = ["Alex Morgan", "Priya Nair", "Tom Becker", "Sofia Rossi", "Daniel Cho"];
+const $ = id => document.getElementById(id);
+
+function esc(value) {
+  return String(value ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+}
+
+function parseCsv(text) {
+  const rows = [];
+  let row = [], cell = "", quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i], next = text[i + 1];
+    if (ch === '"' && quoted && next === '"') { cell += '"'; i++; }
+    else if (ch === '"') quoted = !quoted;
+    else if (ch === "," && !quoted) { row.push(cell.trim()); cell = ""; }
+    else if ((ch === "\n" || ch === "\r") && !quoted) {
+      if (ch === "\r" && next === "\n") i++;
+      row.push(cell.trim());
+      if (row.some(Boolean)) rows.push(row);
+      row = []; cell = "";
+    } else cell += ch;
+  }
+  row.push(cell.trim());
+  if (row.some(Boolean)) rows.push(row);
+  const headers = (rows.shift() || []).map(h => h.replace(/^\uFEFF/, ""));
+  return { headers, records: rows.map(r => Object.fromEntries(headers.map((h, i) => [h, r[i] ?? ""]))) };
+}
+
+function numeric(values) {
+  return values.map(v => Number(String(v).replace(/[^0-9.-]/g, ""))).filter(Number.isFinite);
+}
+
+function detect(headers) {
+  const lower = headers.map(h => h.toLowerCase());
+  const find = terms => headers.filter((h, i) => terms.some(t => lower[i].includes(t)));
+  return {
+    date: find(["date", "day", "month", "year"]),
+    amount: find(["amount", "income", "rate", "salary", "cost", "price", "total"]),
+    category: find(["department", "category", "status", "role", "field", "gender", "attrition", "travel"]),
+    id: find(["id", "number", "employee"])
+  };
+}
+
+function analyse() {
+  const raw = $("csv").value.trim();
+  if (!raw) return;
+  const { headers, records } = parseCsv(raw);
+  const detected = detect(headers);
+  const findings = [];
+
+  headers.forEach(h => {
+    const blanks = records.filter(r => !String(r[h] || "").trim()).length;
+    if (blanks) findings.push(["Completeness", `Missing values in ${h}`, `${blanks} of ${records.length} rows are blank.`, `Who owns ${h}, and should blanks be corrected, excluded, or explained before decisions use this file?`, blanks / Math.max(records.length, 1) > .1 ? "High" : "Medium"]);
+  });
+
+  detected.amount.forEach(h => {
+    const nums = numeric(records.map(r => r[h]));
+    if (nums.length > 3) {
+      const avg = nums.reduce((a,b) => a + b, 0) / nums.length;
+      const max = Math.max(...nums);
+      const min = Math.min(...nums);
+      if (max > avg * 2.4) findings.push(["Out of the ordinary", `High outlier in ${h}`, `Maximum ${max.toLocaleString()} vs average ${Math.round(avg).toLocaleString()}.`, `Is the largest ${h} value expected, or should the owner validate it against source records?`, "Medium"]);
+      if (min < 0) findings.push(["Reliability", `Negative value in ${h}`, `Minimum value is ${min.toLocaleString()}.`, `Does a negative ${h} represent a correction, refund, or data error?`, "High"]);
+    }
+  });
+
+  detected.id.forEach(h => {
+    const seen = new Set(), dup = new Set();
+    records.forEach(r => { const v = r[h]; if (v && seen.has(v)) dup.add(v); seen.add(v); });
+    if (dup.size) findings.push(["Duplicates", `Duplicate identifiers in ${h}`, `${dup.size} duplicate identifier values found.`, `Can ${h} be trusted as a unique key, or does the dataset need deduplication?`, "High"]);
+  });
+
+  if (headers.includes("Attrition") && headers.includes("OverTime")) {
+    const leavers = records.filter(r => String(r.Attrition).toLowerCase() === "yes");
+    const overtime = leavers.filter(r => String(r.OverTime).toLowerCase() === "yes").length;
+    findings.push(["HR attrition", "Overtime appears in attrition cases", `${overtime} of ${leavers.length} attrition rows have OverTime = Yes.`, "Should HR investigate whether overtime is a driver of regrettable attrition?", "High"]);
+  }
+
+  if (!findings.length && records.length) findings.push(["Reliability", "No obvious structural issue found", `${records.length} rows and ${headers.length} columns scanned in-browser.`, "Which business rule should be added next to challenge this dataset more deeply?", "Low"]);
+
+  render(headers, records, detected, findings);
+}
+
+function render(headers, records, detected, findings) {
+  $("rows").textContent = records.length;
+  $("cols").textContent = headers.length;
+  $("issues").textContent = findings.length;
+  $("score").textContent = Math.max(0, 100 - findings.filter(f => f[4] === "High").length * 22 - findings.filter(f => f[4] === "Medium").length * 10);
+
+  $("detected").innerHTML = Object.entries(detected).map(([k, vals]) => `<p><b>${esc(k)}:</b> <code>${esc(vals.length ? vals.join(", ") : "none")}</code></p>`).join("");
+  $("findings").innerHTML = `<tr><th>#</th><th>Issue Area</th><th>What we detected</th><th>Evidence</th><th>Strategic question</th><th>Assigned to</th><th>Sev.</th><th>Response</th></tr>` +
+    findings.map((f, i) => `<tr><td>${i + 1}</td><td><b>${esc(f[0])}</b></td><td>${esc(f[1])}</td><td class="ev">${esc(f[2])}</td><td>${esc(f[3])}</td><td><select>${reviewers.map(r => `<option>${esc(r)}</option>`).join("")}</select></td><td class="sev-${f[4]}">${f[4]}</td><td><span class="pill pending">pending</span><div class="resp-empty">not notified yet</div></td></tr>`).join("");
+  $("preview").innerHTML = `<tr>${headers.map(h => `<th>${esc(h)}</th>`).join("")}</tr>` +
+    records.slice(0, 8).map(r => `<tr>${headers.map(h => `<td>${esc(r[h])}</td>`).join("")}</tr>`).join("");
+}
+
+$("sample").addEventListener("click", () => { $("csv").value = sampleCsv; analyse(); });
+$("analyse").addEventListener("click", analyse);
+$("file").addEventListener("change", async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  $("csv").value = await file.text();
+  analyse();
+});
+</script>
+</body></html>
