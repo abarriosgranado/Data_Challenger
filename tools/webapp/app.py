@@ -541,8 +541,11 @@ def users_save():
     return redirect(url_for("home"))
 
 
-@app.route("/upload", methods=["POST"])
+@app.route("/upload", methods=["GET", "POST"])
 def upload():
+    if request.method == "GET":
+        flash("Please upload a file from the home page.")
+        return redirect(url_for("home"))
     f = request.files.get("file")
     if not f or not f.filename:
         flash("Please select a file first.")
