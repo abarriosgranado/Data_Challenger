@@ -54,7 +54,7 @@ for d in (DATA, UPLOADS, REPORTS):
     os.makedirs(d, exist_ok=True)
 
 app = Flask(__name__)
-app.secret_key = "local-prototype-not-for-production"
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "local-prototype-not-for-production")
 
 # MVP folder structure: department -> topic. Reports are routed into a topic
 # when their source filename contains one of the 'match' substrings.
