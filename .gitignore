@@ -1,0 +1,12 @@
+# runtime data: uploads, generated reports, response tokens — never commit
+tools/webapp/data/
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# local artefacts
+*.pdf
+.DS_Store

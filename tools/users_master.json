@@ -1,0 +1,112 @@
+{
+  "_comment": "Master data for the Data Challenge review app. 'users' is the governed list a reviewer picks from. 'routing' auto-assigns each finding's issue area to a user; 'default_assignee' catches anything unmatched. Edit emails/roles here; keep 'id' stable once issued.",
+  "settings": {
+    "base_url": "https://REPLACE-ME.example.com/respond",
+    "link_expiry_days": 14
+  },
+  "users": [
+    {
+      "id": "u001",
+      "name": "Alex Morgan",
+      "email": "alex.morgan@example.com",
+      "role": "Logistics Manager",
+      "department": "Logistics",
+      "active": true
+    },
+    {
+      "id": "u002",
+      "name": "Priya Nair",
+      "email": "priya.nair@example.com",
+      "role": "Financial Controller",
+      "department": "Finance",
+      "active": true
+    },
+    {
+      "id": "u003",
+      "name": "Tom Becker",
+      "email": "tom.becker@example.com",
+      "role": "Human Resource Director",
+      "department": "HR",
+      "active": true
+    },
+    {
+      "id": "u004",
+      "name": "Sofia Rossi",
+      "email": "sofia.rossi@example.com",
+      "role": "Travel & Expense Lead",
+      "department": "Finance",
+      "active": true
+    },
+    {
+      "id": "u005",
+      "name": "Daniel Cho",
+      "email": "daniel.cho@example.com",
+      "role": "Treasury / FX",
+      "department": "Treasury",
+      "active": true
+    }
+  ],
+  "routing": [
+    {
+      "match": "currency",
+      "assignee": "u005"
+    },
+    {
+      "match": "fx",
+      "assignee": "u005"
+    },
+    {
+      "match": "completeness",
+      "assignee": "u002"
+    },
+    {
+      "match": "missing data",
+      "assignee": "u002"
+    },
+    {
+      "match": "reliability",
+      "assignee": "u002"
+    },
+    {
+      "match": "duplicat",
+      "assignee": "u003"
+    },
+    {
+      "match": "don't look right",
+      "assignee": "u003"
+    },
+    {
+      "match": "out of the ordinary",
+      "assignee": "u001"
+    },
+    {
+      "match": "extreme case",
+      "assignee": "u001"
+    },
+    {
+      "match": "where the money goes",
+      "assignee": "u001"
+    },
+    {
+      "match": "slower",
+      "assignee": "u001"
+    },
+    {
+      "match": "unfinished",
+      "assignee": "u001"
+    },
+    {
+      "match": "zero",
+      "assignee": "u004"
+    },
+    {
+      "match": "negative",
+      "assignee": "u004"
+    },
+    {
+      "match": "categor",
+      "assignee": "u004"
+    }
+  ],
+  "default_assignee": "u001"
+}
