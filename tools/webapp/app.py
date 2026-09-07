@@ -398,8 +398,11 @@ RESPOND = """
 FOLDER = """
 <div class="card">
  <h2>&#128193; {{ folder.dept }} / {{ folder.topic }}</h2>
- {% if not days %}
-   <p class="muted">No responses have been recorded in this folder yet.</p>
+ {% if not docs %}
+   <p class="muted">No reviews have been uploaded in this folder yet.</p>
+   <p><a class="btn secondary" href="{{ url_for('home') }}">Home</a></p>
+ {% elif not days %}
+   <p class="muted">Reviews are loaded in this folder. No owner responses have been recorded yet.</p>
    <p><a class="btn secondary" href="{{ url_for('home') }}">Home</a></p>
  {% else %}
    <p>
@@ -421,9 +424,9 @@ FOLDER = """
 <div class="card">
  <h3>Document: {{ doc.source_file }}
      <a class="btn secondary" style="float:right" href="{{ url_for('report_view', rid=doc.report_id) }}">Open review</a></h3>
- <p class="muted">Responses obtained up to {{ day }}: <b>{{ doc.answered }}/{{ doc.total }}</b></p>
+ <p class="muted">{% if day %}Responses obtained up to {{ day }}{% else %}Responses recorded{% endif %}: <b>{{ doc.answered }}/{{ doc.total }}</b></p>
  <table class="doc-table">
-  <tr><th>#</th><th>Issue Area</th><th>Question</th><th>Assigned to</th><th>Sev.</th><th>Response as of {{ day }}</th></tr>
+  <tr><th>#</th><th>Issue Area</th><th>Question</th><th>Assigned to</th><th>Sev.</th><th>{% if day %}Response as of {{ day }}{% else %}Response status{% endif %}</th></tr>
   {% for r in doc.rows %}
   <tr>
    <td>{{ r.finding_no }}</td>
@@ -490,6 +493,27 @@ def home():
                   max_web_rows=f"{MAX_WEB_ROWS:,}", max_web_cols=MAX_WEB_COLS)
 
 
+def folder_docs(stores, day=None, active_ids=None):
+    docs = []
+    for s in stores:
+        if active_ids is not None and s["report_id"] not in active_ids:
+            continue
+        rows = []
+        answered = 0
+        for r in s["requests"]:
+            done = bool(r.get("status") == "answered" and r.get("responded_utc")
+                        and (not day or r["responded_utc"][:10] <= day))
+            if done:
+                answered += 1
+            rows.append({"finding_no": r["finding_no"], "issue_area": r["issue_area"],
+                         "question": r["question"], "assignee_name": r.get("assignee_name", ""),
+                         "severity": r["severity"], "answered": done,
+                         "response": r.get("response") or ""})
+        docs.append({"report_id": s["report_id"], "source_file": s.get("source_file", ""),
+                     "rows": rows, "answered": answered, "total": len(rows)})
+    return docs
+
+
 @app.route("/folder/<slug>")
 @app.route("/folder/<slug>/<day>")
 def folder_view(slug, day=None):
@@ -516,7 +540,7 @@ def folder_view(slug, day=None):
     days = sorted({i["day"] for i in items})
     if not days:
         return render(FOLDER, folder=folder, days=[], day=None, prev_day=None,
-                      next_day=None, pos=0, items=[], docs=[])
+                      next_day=None, pos=0, items=[], docs=folder_docs(stores))
     if day not in days:
         day = days[-1]
     idx = days.index(day)
@@ -526,24 +550,8 @@ def folder_view(slug, day=None):
 
     # Documents active that day: each report shown with the responses obtained
     # up to (and including) the selected day.
-    docs = []
     active_ids = {i["report_id"] for i in day_items}
-    for s in stores:
-        if s["report_id"] not in active_ids:
-            continue
-        rows = []
-        answered = 0
-        for r in s["requests"]:
-            done = bool(r.get("status") == "answered" and r.get("responded_utc")
-                        and r["responded_utc"][:10] <= day)
-            if done:
-                answered += 1
-            rows.append({"finding_no": r["finding_no"], "issue_area": r["issue_area"],
-                         "question": r["question"], "assignee_name": r.get("assignee_name", ""),
-                         "severity": r["severity"], "answered": done,
-                         "response": r.get("response") or ""})
-        docs.append({"report_id": s["report_id"], "source_file": s.get("source_file", ""),
-                     "rows": rows, "answered": answered, "total": len(rows)})
+    docs = folder_docs(stores, day=day, active_ids=active_ids)
     return render(FOLDER, folder=folder, days=days, day=day, day_label=day_label(day),
                   prev_day=prev_day, next_day=next_day, pos=idx + 1,
                   items=day_items, docs=docs)
