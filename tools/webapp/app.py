@@ -575,21 +575,25 @@ def upload():
         flash(f"Could not process the file: {e}")
         return redirect(url_for("home"))
 
-    master = load_users(USERS_PATH)
-    store, _ = build_requests(result, master, fname, cols)
-    store["profile"] = result.profile
-    store["column_profile"] = col_profile
-    for r in store["requests"]:
-        r["responder"] = None
-        # Point the link at THIS app so the URL delivered via Slack resolves
-        # (the master-data base_url is still a placeholder).
-        r["response_link"] = url_for("respond", token=r["token"], _external=True)
-    save_report(store)
+    try:
+        master = load_users(USERS_PATH)
+        store, _ = build_requests(result, master, fname, cols)
+        store["profile"] = result.profile
+        store["column_profile"] = col_profile
+        for r in store["requests"]:
+            r["responder"] = None
+            # Point the link at THIS app so the URL delivered via Slack resolves
+            # (the master-data base_url is still a placeholder).
+            r["response_link"] = url_for("respond", token=r["token"], _external=True)
+        save_report(store)
 
-    idx = _load_tokens()
-    for r in store["requests"]:
-        idx[r["token"]] = store["report_id"]
-    _save_tokens(idx)
+        idx = _load_tokens()
+        for r in store["requests"]:
+            idx[r["token"]] = store["report_id"]
+        _save_tokens(idx)
+    except Exception as e:
+        flash(f"Could not create the review workflow: {e}")
+        return redirect(url_for("home"))
 
     return redirect(url_for("report_view", rid=store["report_id"]))
 
