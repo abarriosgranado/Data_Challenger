@@ -64,15 +64,39 @@ MAX_HOME_REPORTS = int(os.environ.get("MAX_HOME_REPORTS", "50"))
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_MB * 1024 * 1024
 
 # MVP folder structure: department -> topic. Reports are routed into a topic
-# when their source filename contains one of the 'match' substrings.
+# using the detected domain first, then filename fallback for older reports.
 FOLDERS = [
     {"dept": "LOGISTICS",  "topic": "Delivery Times",  "slug": "delivery-times",
-     "match": ["delivery"]},
+     "match": ["delivery", "shipment", "order"]},
     {"dept": "ACCOUNTING", "topic": "Travel Expenses", "slug": "travel-expenses",
-     "match": ["travel", "expense"]},
+     "match": ["travel", "expense", "receipt", "merchant"]},
     {"dept": "HUMAN RESOURCES", "topic": "Employee Turnover", "slug": "employee-turnover",
      "match": ["turnover", "attrition", "employee", "churn"]},
 ]
+
+DOMAIN_SIGNATURES = {
+    "delivery-times": {
+        "columns": ["delivery", "deliverytime", "delivery_time", "deliverydays",
+                    "delivery_days", "shipment", "shipping", "order", "orderid",
+                    "order_id", "driver", "rider", "courier", "distance", "weather",
+                    "traffic", "pickup", "dropoff", "dispatch", "arrival", "eta"],
+        "values": ["delivered", "delivery", "shipment", "courier", "driver", "traffic"],
+    },
+    "travel-expenses": {
+        "columns": ["travel", "expense", "expenses", "claim", "amount", "merchant",
+                    "vendor", "receipt", "policy", "trip", "hotel", "flight", "taxi",
+                    "mileage", "reimbursement", "cost", "vat", "invoice"],
+        "values": ["hotel", "flight", "taxi", "uber", "train", "restaurant", "receipt",
+                   "reimbursement", "travel", "expense"],
+    },
+    "employee-turnover": {
+        "columns": ["employee", "employeeid", "employee_id", "empid", "staff",
+                    "worker", "attrition", "turnover", "leaver", "terminated",
+                    "resigned", "salary", "income", "tenure", "overtime", "department",
+                    "jobrole", "job_role", "manager", "hiredate", "hire_date"],
+        "values": ["attrition", "resigned", "terminated", "leaver", "overtime"],
+    },
+}
 
 
 def folder_by_slug(slug: str) -> dict | None:
@@ -83,8 +107,59 @@ def folder_by_slug(slug: str) -> dict | None:
 
 
 def report_in_folder(store: dict, folder: dict) -> bool:
+    if store.get("domain_slug") == folder["slug"]:
+        return True
     name = (store.get("source_file") or "").lower()
     return any(m in name for m in folder["match"])
+
+
+def _domain_norm(text: str) -> str:
+    return "".join(ch for ch in str(text).lower() if ch.isalnum())
+
+
+def _domain_contains(text: str, term: str) -> bool:
+    return _domain_norm(term) in _domain_norm(text)
+
+
+def detect_dataset_domain(df, filename: str = "") -> dict:
+    """Classify a dataset by headers and a light sample of values."""
+    scores = {slug: 0 for slug in DOMAIN_SIGNATURES}
+    reasons = {slug: [] for slug in DOMAIN_SIGNATURES}
+
+    headers = list(df.columns)
+    for slug, sig in DOMAIN_SIGNATURES.items():
+        for c in headers:
+            matched = [term for term in sig["columns"] if _domain_contains(c, term)]
+            if matched:
+                scores[slug] += 3
+                reasons[slug].append(str(c))
+
+    sample_cols = headers[: min(len(headers), 25)]
+    for c in sample_cols:
+        values = df[c].dropna().astype(str).head(50)
+        joined = " ".join(values).lower()
+        for slug, sig in DOMAIN_SIGNATURES.items():
+            if any(term in joined for term in sig["values"]):
+                scores[slug] += 1
+                reasons[slug].append(f"{c} values")
+
+    filename_l = filename.lower()
+    for folder in FOLDERS:
+        if any(m in filename_l for m in folder["match"]):
+            scores[folder["slug"]] += 1
+            reasons[folder["slug"]].append("filename")
+
+    best_slug = max(scores, key=scores.get)
+    if scores[best_slug] < 3:
+        return {"slug": None, "score": scores[best_slug], "reason": "No clear domain signature"}
+    folder = folder_by_slug(best_slug)
+    return {
+        "slug": best_slug,
+        "score": scores[best_slug],
+        "department": folder["dept"] if folder else None,
+        "topic": folder["topic"] if folder else None,
+        "reason": ", ".join(dict.fromkeys(reasons[best_slug]))[:240],
+    }
 
 
 def all_reports() -> list:
@@ -319,6 +394,9 @@ REPORT = """
 <div class="card">
  <h2>Review: <span class="muted">{{ store.source_file }}</span></h2>
  <p class="muted">Data date: <b>{{ store.dataset_date or (store.generated_utc or '')[:10] }}</b></p>
+ {% if store.domain_topic %}
+ <p class="muted">Detected domain: <b>{{ store.domain_department }} / {{ store.domain_topic }}</b>{% if store.domain_reason %} &middot; {{ store.domain_reason }}{% endif %}</p>
+ {% endif %}
  {% if report_nav %}
  <div style="text-align:center;margin:10px 0 14px">
    <span class="muted">Data-date navigation{% if report_nav.folder %} &middot; {{ report_nav.folder.dept }} / {{ report_nav.folder.topic }}{% endif %}</span><br>
@@ -658,9 +736,13 @@ def upload():
     try:
         df = load_table(saved, sheet, max_rows=MAX_WEB_ROWS + 1)
         df, web_notes = prepare_web_dataframe(df)
+        domain = detect_dataset_domain(df, fname)
         cfg = Config()
         hr = detect_hr(df)
         if hr:
+            domain = {"slug": "employee-turnover", "score": 999,
+                      "department": "HUMAN RESOURCES", "topic": "Employee Turnover",
+                      "reason": "HR turnover column signature"}
             # HR / employee-turnover data: domain-specific checks + questions
             result = run_hr_checks(df, hr)
             generic_checks(df, cfg, result, skip_cols=[hr.get("income")])
@@ -683,6 +765,10 @@ def upload():
         master = load_users(USERS_PATH)
         store, _ = build_requests(result, master, fname, cols)
         store["dataset_date"] = data_date
+        store["domain_slug"] = domain.get("slug")
+        store["domain_department"] = domain.get("department")
+        store["domain_topic"] = domain.get("topic")
+        store["domain_reason"] = domain.get("reason")
         store["profile"] = result.profile
         store["column_profile"] = col_profile
         for r in store["requests"]:
