@@ -35,6 +35,7 @@ sys.path.insert(0, TOOLS)
 
 from flask import (Flask, request, redirect, url_for, send_file, abort,
                    render_template_string, flash)
+from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.utils import secure_filename
 
 from data_challenge import (Config, load_table, detect_columns, normalize,
@@ -55,6 +56,12 @@ for d in (DATA, UPLOADS, REPORTS):
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "local-prototype-not-for-production")
+MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "8"))
+MAX_WEB_ROWS = int(os.environ.get("MAX_WEB_ROWS", "5000"))
+MAX_WEB_COLS = int(os.environ.get("MAX_WEB_COLS", "80"))
+MAX_WEB_FINDINGS = int(os.environ.get("MAX_WEB_FINDINGS", "60"))
+MAX_HOME_REPORTS = int(os.environ.get("MAX_HOME_REPORTS", "50"))
+app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_MB * 1024 * 1024
 
 # MVP folder structure: department -> topic. Reports are routed into a topic
 # when their source filename contains one of the 'match' substrings.
@@ -82,12 +89,39 @@ def report_in_folder(store: dict, folder: dict) -> bool:
 
 def all_reports() -> list:
     out = []
-    for fn in sorted(os.listdir(REPORTS)):
+    entries = sorted(
+        (e for e in os.scandir(REPORTS) if e.name.endswith(".json")),
+        key=lambda e: e.stat().st_mtime,
+        reverse=True,
+    )[:MAX_HOME_REPORTS]
+    for entry in entries:
+        fn = entry.name
         if fn.endswith(".json"):
             s = load_report(fn[:-5])
             if s:
                 out.append(s)
     return out
+
+
+def prepare_web_dataframe(df):
+    """Keep the hosted demo responsive on small free web instances."""
+    notes = []
+    if len(df) > MAX_WEB_ROWS:
+        notes.append(f"Analysed the first {MAX_WEB_ROWS:,} rows for the hosted demo.")
+        df = df.head(MAX_WEB_ROWS).copy()
+    if len(df.columns) > MAX_WEB_COLS:
+        notes.append(f"Analysed the first {MAX_WEB_COLS} columns for the hosted demo.")
+        df = df.iloc[:, :MAX_WEB_COLS].copy()
+    return df, notes
+
+
+def limit_web_findings(result):
+    if len(result.findings) <= MAX_WEB_FINDINGS:
+        return None
+    order = {"High": 0, "Medium": 1, "Low": 2}
+    total = len(result.findings)
+    result.findings = sorted(result.findings, key=lambda f: order.get(f.severity, 3))[:MAX_WEB_FINDINGS]
+    return f"Showing the top {MAX_WEB_FINDINGS} findings out of {total} generated."
 
 
 # --------------------------------------------------------------------------- #
@@ -213,7 +247,7 @@ BASE = """
 HOME = """
 <div class="card">
  <h2>1) Upload the file</h2>
- <p class="muted">Formats: CSV or Excel (.xlsx). Column names may vary; they are auto-detected.</p>
+ <p class="muted">Formats: CSV or Excel (.xlsx). Column names may vary; they are auto-detected. Hosted demo limit: files up to {{ max_upload_mb }} MB, analysing up to {{ max_web_rows }} rows and {{ max_web_cols }} columns.</p>
  <form method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data">
    <p><input type="file" name="file" accept=".csv,.xlsx,.xls" required></p>
    <p>Excel sheet (optional): <input type="text" name="sheet" placeholder="e.g. Raw Data"><br>
@@ -420,6 +454,19 @@ def render(body_tmpl, **ctx):
     return render_template_string(BASE, body=body)
 
 
+@app.errorhandler(RequestEntityTooLarge)
+def upload_too_large(_err):
+    flash(f"File too large for the hosted demo. Please upload a file up to {MAX_UPLOAD_MB} MB.")
+    return redirect(url_for("home")), 303
+
+
+@app.errorhandler(500)
+def internal_error(err):
+    app.logger.exception("Unhandled Data Challenger error: %s", err)
+    flash("The hosted demo could not finish that request. Please try a smaller CSV/XLSX file or remove empty/unused columns.")
+    return redirect(url_for("home")), 303
+
+
 # --------------------------------------------------------------------------- #
 # rutas
 # --------------------------------------------------------------------------- #
@@ -439,7 +486,8 @@ def home():
                 placed = True
         if not placed:
             folders.append((f["dept"], [entry]))
-    return render(HOME, users=users, folders=folders)
+    return render(HOME, users=users, folders=folders, max_upload_mb=MAX_UPLOAD_MB,
+                  max_web_rows=f"{MAX_WEB_ROWS:,}", max_web_cols=MAX_WEB_COLS)
 
 
 @app.route("/folder/<slug>")
@@ -556,7 +604,8 @@ def upload():
     sheet = request.form.get("sheet") or None
 
     try:
-        df = load_table(saved, sheet)
+        df = load_table(saved, sheet, max_rows=MAX_WEB_ROWS + 1)
+        df, web_notes = prepare_web_dataframe(df)
         cfg = Config()
         hr = detect_hr(df)
         if hr:
@@ -570,7 +619,10 @@ def upload():
             t = normalize(df, cols)
             result = run_checks(t, cfg)
             generic_checks(df, cfg, result, skip_cols=[cols.get("amount")])
+        findings_note = limit_web_findings(result)
         col_profile = profile_columns(df)
+        if web_notes or findings_note:
+            result.profile["Hosted demo note"] = " ".join(web_notes + ([findings_note] if findings_note else []))
     except Exception as e:
         flash(f"Could not process the file: {e}")
         return redirect(url_for("home"))

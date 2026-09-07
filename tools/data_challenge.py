@@ -83,15 +83,15 @@ class Result:
 # --------------------------------------------------------------------------- #
 # Loading & column detection
 # --------------------------------------------------------------------------- #
-def load_table(path: str, sheet: str | None = None) -> pd.DataFrame:
+def load_table(path: str, sheet: str | None = None, max_rows: int | None = None) -> pd.DataFrame:
     ext = os.path.splitext(path)[1].lower()
     if ext in (".xlsx", ".xlsm", ".xls"):
-        df = pd.read_excel(path, sheet_name=sheet or 0)
+        df = pd.read_excel(path, sheet_name=sheet or 0, nrows=max_rows)
     else:
         # robust CSV: sniff separator, tolerate latin-1
         for sep in (None, ";", ",", "\t"):
             try:
-                df = pd.read_csv(path, sep=sep, engine="python", encoding="latin-1")
+                df = pd.read_csv(path, sep=sep, engine="python", encoding="latin-1", nrows=max_rows)
                 if df.shape[1] > 1:
                     break
             except Exception:
