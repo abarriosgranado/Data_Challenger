@@ -164,6 +164,10 @@ def day_label(day: str) -> str:
         return day or ""
 
 
+def report_day(store: dict) -> str:
+    return (store.get("dataset_date") or store.get("generated_utc") or "")[:10]
+
+
 def find_request(store: dict, token: str) -> dict | None:
     for r in store["requests"]:
         if r["token"] == token:
@@ -250,6 +254,8 @@ HOME = """
  <p class="muted">Formats: CSV or Excel (.xlsx). Column names may vary; they are auto-detected. Hosted demo limit: files up to {{ max_upload_mb }} MB, analysing up to {{ max_web_rows }} rows and {{ max_web_cols }} columns.</p>
  <form method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data">
    <p><input type="file" name="file" accept=".csv,.xlsx,.xls" required></p>
+   <p>Data date: <input type="date" name="data_date" required><br>
+      <span class="muted">Choose the business date this dataset belongs to. Folder views use this date for day-by-day navigation.</span></p>
    <p>Excel sheet (optional): <input type="text" name="sheet" placeholder="e.g. Raw Data"><br>
       <span class="muted">Only for Excel files with several tabs: type the name of the sheet that holds
       the data. Leave it blank to use the first sheet. Ignored for CSV files.</span></p>
@@ -312,6 +318,7 @@ HOME = """
 REPORT = """
 <div class="card">
  <h2>Review: <span class="muted">{{ store.source_file }}</span></h2>
+ <p class="muted">Data date: <b>{{ store.dataset_date or (store.generated_utc or '')[:10] }}</b></p>
  <p>
    <a class="btn" href="{{ url_for('report_pdf', rid=store.report_id) }}">Download PDF</a>
    <a class="btn secondary" href="{{ url_for('home') }}">New review</a>
@@ -407,9 +414,9 @@ FOLDER = """
  {% else %}
    <p>
      <div style="text-align:center;margin:6px 0 2px">
-     <span class="muted">You are viewing</span><br>
+     <span class="muted">Reviews for data date</span><br>
      <span style="font-size:22px;font-weight:bold">{{ day_label }}</span><br>
-     <span class="muted">day {{ pos }} of {{ days|length }} &middot; {{ items|length }} comment(s)</span>
+     <span class="muted">day {{ pos }} of {{ days|length }} &middot; {{ docs|length }} review(s)</span>
    </div>
    <p style="text-align:center;margin-top:12px">
      {% if prev_day %}<a class="btn" href="{{ url_for('folder_view', slug=folder.slug, day=prev_day) }}">&#9664; Previous day ({{ prev_day }})</a>
@@ -424,9 +431,10 @@ FOLDER = """
 <div class="card">
  <h3>Document: {{ doc.source_file }}
      <a class="btn secondary" style="float:right" href="{{ url_for('report_view', rid=doc.report_id) }}">Open review</a></h3>
- <p class="muted">{% if day %}Responses obtained up to {{ day }}{% else %}Responses recorded{% endif %}: <b>{{ doc.answered }}/{{ doc.total }}</b></p>
+ <p class="muted">Data date: <b>{{ doc.data_date }}</b></p>
+ <p class="muted">Responses recorded: <b>{{ doc.answered }}/{{ doc.total }}</b></p>
  <table class="doc-table">
-  <tr><th>#</th><th>Issue Area</th><th>Question</th><th>Assigned to</th><th>Sev.</th><th>{% if day %}Response as of {{ day }}{% else %}Response status{% endif %}</th></tr>
+  <tr><th>#</th><th>Issue Area</th><th>Question</th><th>Assigned to</th><th>Sev.</th><th>Response status</th></tr>
   {% for r in doc.rows %}
   <tr>
    <td>{{ r.finding_no }}</td>
@@ -501,8 +509,7 @@ def folder_docs(stores, day=None, active_ids=None):
         rows = []
         answered = 0
         for r in s["requests"]:
-            done = bool(r.get("status") == "answered" and r.get("responded_utc")
-                        and (not day or r["responded_utc"][:10] <= day))
+            done = bool(r.get("status") == "answered" and r.get("responded_utc"))
             if done:
                 answered += 1
             rows.append({"finding_no": r["finding_no"], "issue_area": r["issue_area"],
@@ -510,6 +517,7 @@ def folder_docs(stores, day=None, active_ids=None):
                          "severity": r["severity"], "answered": done,
                          "response": r.get("response") or ""})
         docs.append({"report_id": s["report_id"], "source_file": s.get("source_file", ""),
+                     "data_date": report_day(s),
                      "rows": rows, "answered": answered, "total": len(rows)})
     return docs
 
@@ -522,22 +530,7 @@ def folder_view(slug, day=None):
         abort(404)
     stores = [s for s in all_reports() if report_in_folder(s, folder)]
 
-    items = []
-    for s in stores:
-        for r in s["requests"]:
-            if r.get("status") == "answered" and r.get("responded_utc"):
-                items.append({
-                    "day": r["responded_utc"][:10],
-                    "time": r["responded_utc"][11:16],
-                    "report_id": s["report_id"],
-                    "source_file": s.get("source_file", s["report_id"]),
-                    "issue_area": r["issue_area"],
-                    "severity": r["severity"],
-                    "question": r["question"],
-                    "response": r.get("response") or "",
-                    "responder": r.get("responder") or r.get("assignee_name") or "",
-                })
-    days = sorted({i["day"] for i in items})
+    days = sorted({report_day(s) for s in stores if report_day(s)})
     if not days:
         return render(FOLDER, folder=folder, days=[], day=None, prev_day=None,
                       next_day=None, pos=0, items=[], docs=folder_docs(stores))
@@ -546,11 +539,8 @@ def folder_view(slug, day=None):
     idx = days.index(day)
     prev_day = days[idx - 1] if idx > 0 else None
     next_day = days[idx + 1] if idx < len(days) - 1 else None
-    day_items = sorted((i for i in items if i["day"] == day), key=lambda i: i["time"])
-
-    # Documents active that day: each report shown with the responses obtained
-    # up to (and including) the selected day.
-    active_ids = {i["report_id"] for i in day_items}
+    day_items = []
+    active_ids = {s["report_id"] for s in stores if report_day(s) == day}
     docs = folder_docs(stores, day=day, active_ids=active_ids)
     return render(FOLDER, folder=folder, days=days, day=day, day_label=day_label(day),
                   prev_day=prev_day, next_day=next_day, pos=idx + 1,
@@ -610,6 +600,12 @@ def upload():
     saved = os.path.join(UPLOADS, fname)
     f.save(saved)
     sheet = request.form.get("sheet") or None
+    data_date = (request.form.get("data_date") or "").strip()
+    try:
+        datetime.strptime(data_date, "%Y-%m-%d")
+    except ValueError:
+        flash("Please choose the data date before creating the review.")
+        return redirect(url_for("home"))
 
     try:
         df = load_table(saved, sheet, max_rows=MAX_WEB_ROWS + 1)
@@ -638,6 +634,7 @@ def upload():
     try:
         master = load_users(USERS_PATH)
         store, _ = build_requests(result, master, fname, cols)
+        store["dataset_date"] = data_date
         store["profile"] = result.profile
         store["column_profile"] = col_profile
         for r in store["requests"]:
