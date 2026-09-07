@@ -331,6 +331,14 @@ HOME = """
    <p><input type="file" name="file" accept=".csv,.xlsx,.xls" required></p>
    <p>Data date: <input type="date" name="data_date" required><br>
       <span class="muted">Choose the business date this dataset belongs to. Folder views use this date for day-by-day navigation.</span></p>
+   <p>Destination folder:
+      <select name="domain_slug">
+        <option value="">Auto-detect from file</option>
+        {% for folder in upload_folders %}
+          <option value="{{ folder.slug }}">{{ folder.dept }} / {{ folder.topic }}</option>
+        {% endfor %}
+      </select><br>
+      <span class="muted">Choose a folder if you already know where the review belongs. Leave auto-detect when you want Data Challenger to infer it from columns and content.</span></p>
    <p>Excel sheet (optional): <input type="text" name="sheet" placeholder="e.g. Raw Data"><br>
       <span class="muted">Only for Excel files with several tabs: type the name of the sheet that holds
       the data. Leave it blank to use the first sheet. Ignored for CSV files.</span></p>
@@ -588,8 +596,9 @@ def home():
                 placed = True
         if not placed:
             folders.append((f["dept"], [entry]))
-    return render(HOME, users=users, folders=folders, max_upload_mb=MAX_UPLOAD_MB,
-                  max_web_rows=f"{MAX_WEB_ROWS:,}", max_web_cols=MAX_WEB_COLS)
+    return render(HOME, users=users, folders=folders, upload_folders=FOLDERS,
+                  max_upload_mb=MAX_UPLOAD_MB, max_web_rows=f"{MAX_WEB_ROWS:,}",
+                  max_web_cols=MAX_WEB_COLS)
 
 
 def folder_docs(stores, day=None, active_ids=None):
@@ -726,6 +735,11 @@ def upload():
     saved = os.path.join(UPLOADS, fname)
     f.save(saved)
     sheet = request.form.get("sheet") or None
+    selected_domain_slug = (request.form.get("domain_slug") or "").strip()
+    selected_folder = folder_by_slug(selected_domain_slug) if selected_domain_slug else None
+    if selected_domain_slug and not selected_folder:
+        flash("Please choose a valid destination folder.")
+        return redirect(url_for("home"))
     data_date = (request.form.get("data_date") or "").strip()
     try:
         datetime.strptime(data_date, "%Y-%m-%d")
@@ -737,9 +751,13 @@ def upload():
         df = load_table(saved, sheet, max_rows=MAX_WEB_ROWS + 1)
         df, web_notes = prepare_web_dataframe(df)
         domain = detect_dataset_domain(df, fname)
+        if selected_folder:
+            domain = {"slug": selected_folder["slug"], "score": 999,
+                      "department": selected_folder["dept"], "topic": selected_folder["topic"],
+                      "reason": "Selected by user"}
         cfg = Config()
         hr = detect_hr(df)
-        if hr:
+        if hr and not selected_folder:
             domain = {"slug": "employee-turnover", "score": 999,
                       "department": "HUMAN RESOURCES", "topic": "Employee Turnover",
                       "reason": "HR turnover column signature"}
