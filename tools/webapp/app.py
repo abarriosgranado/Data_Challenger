@@ -319,6 +319,19 @@ REPORT = """
 <div class="card">
  <h2>Review: <span class="muted">{{ store.source_file }}</span></h2>
  <p class="muted">Data date: <b>{{ store.dataset_date or (store.generated_utc or '')[:10] }}</b></p>
+ {% if report_nav %}
+ <div style="text-align:center;margin:10px 0 14px">
+   <span class="muted">Data-date navigation{% if report_nav.folder %} &middot; {{ report_nav.folder.dept }} / {{ report_nav.folder.topic }}{% endif %}</span><br>
+   <span style="font-size:20px;font-weight:bold">{{ report_nav.label }}</span><br>
+   <span class="muted">day {{ report_nav.pos }} of {{ report_nav.total }}</span>
+ </div>
+ <p style="text-align:center;margin-top:10px">
+   {% if report_nav.prev_rid %}<a class="btn" href="{{ url_for('report_view', rid=report_nav.prev_rid) }}">&#9664; Previous day ({{ report_nav.prev_day }})</a>
+   {% else %}<span class="btn secondary" style="opacity:.4">&#9664; Previous day</span>{% endif %}
+   {% if report_nav.next_rid %}<a class="btn" href="{{ url_for('report_view', rid=report_nav.next_rid) }}">Next day ({{ report_nav.next_day }}) &#9654;</a>
+   {% else %}<span class="btn secondary" style="opacity:.4">Next day &#9654;</span>{% endif %}
+ </p>
+ {% endif %}
  <p>
    <a class="btn" href="{{ url_for('report_pdf', rid=store.report_id) }}">Download PDF</a>
    <a class="btn secondary" href="{{ url_for('home') }}">New review</a>
@@ -522,6 +535,41 @@ def folder_docs(stores, day=None, active_ids=None):
     return docs
 
 
+def folder_for_report(store: dict) -> dict | None:
+    for folder in FOLDERS:
+        if report_in_folder(store, folder):
+            return folder
+    return None
+
+
+def report_navigation(store: dict) -> dict | None:
+    folder = folder_for_report(store)
+    if not folder:
+        return None
+    peers = [s for s in all_reports() if report_in_folder(s, folder)]
+    peers = [s for s in peers if report_day(s)]
+    if len(peers) <= 1:
+        return None
+    peers.sort(key=lambda s: (report_day(s), s.get("generated_utc", ""), s["report_id"]))
+    current_idx = next((i for i, s in enumerate(peers)
+                        if s["report_id"] == store["report_id"]), None)
+    if current_idx is None:
+        return None
+    prev_store = peers[current_idx - 1] if current_idx > 0 else None
+    next_store = peers[current_idx + 1] if current_idx < len(peers) - 1 else None
+    current_day = report_day(store)
+    return {
+        "folder": folder,
+        "label": day_label(current_day),
+        "pos": current_idx + 1,
+        "total": len(peers),
+        "prev_rid": prev_store["report_id"] if prev_store else None,
+        "prev_day": report_day(prev_store) if prev_store else None,
+        "next_rid": next_store["report_id"] if next_store else None,
+        "next_day": report_day(next_store) if next_store else None,
+    }
+
+
 @app.route("/folder/<slug>")
 @app.route("/folder/<slug>/<day>")
 def folder_view(slug, day=None):
@@ -681,7 +729,8 @@ def report_view(rid):
                          and (not day or r["responded_utc"][:10] <= day))
         for r in store["requests"]
     }
-    return render(REPORT, store=store, users=users, nav=nav, answered_map=answered_map)
+    return render(REPORT, store=store, users=users, nav=nav,
+                  report_nav=report_navigation(store), answered_map=answered_map)
 
 
 @app.route("/report/<rid>/assign", methods=["POST"])
