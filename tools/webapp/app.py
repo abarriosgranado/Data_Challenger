@@ -334,7 +334,7 @@ REPORT = """
  {% endif %}
  <p>
    <a class="btn" href="{{ url_for('report_pdf', rid=store.report_id) }}">Download PDF</a>
-   <a class="btn secondary" href="{{ url_for('home') }}">New review</a>
+   <a class="btn secondary" href="{{ url_for('home') }}">Back to home</a>
  </p>
  <form method="post" action="{{ url_for('report_notify', rid=store.report_id) }}" style="display:inline">
    <button class="btn" type="submit">Send questions via Slack</button>
